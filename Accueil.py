@@ -80,7 +80,7 @@ def hash_password(password: str) -> str:
     return hashed.decode('utf-8')
 
 def check_password(password: str, hashed_password: str) -> bool:
-    """Vérifie le mot de passe entré par rapport au hachage stocké."""
+    """Vérifie le mot de passe entré par rapport au hachاج المخزون."""
     try:
         return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
     except Exception:
@@ -249,6 +249,22 @@ def call_gemini_api(prompt, image_part=None):
 
 # --- Fonctions d'Authentification ---
 
+def handle_logout():
+    """تنهي جلسة المستخدم الحالي وتمسح حالة المصادقة من الكوكيز."""
+    # 1. مسح حالة الجلسة
+    if 'user_email' in st.session_state:
+        del st.session_state['user_email']
+    if 'auth_status' in st.session_state:
+        del st.session_state['auth_status']
+    
+    # 2. مسح الكوكيز
+    cookies.delete(COOKIE_KEY_EMAIL)
+    cookies.save()
+    
+    st.info("تم تسجيل الخروج بنجاح. يتم تحديث الصفحة...")
+    st.experimental_rerun() # لإعادة تحميل التطبيق وإظهار شاشة الدخول
+
+
 def load_user_session(email, save_cookie=False):
     user_data = get_user_by_email(email)
     
@@ -316,7 +332,7 @@ def handle_register():
         potential_referrer_email = query_params[REFERRAL_PARAM]
         # Dans Streamlit, les query params peuvent être des listes. On prend le premier élément.
         if isinstance(potential_referrer_email, list):
-            potential_referrer_email = potential_referrer_email[0] 
+            potential_referrer_email = potential_referrer_email[0]  
             
         # 1. Vérifier si l'e-mail du parrain existe
         referrer_data = get_user_by_email(potential_referrer_email)
@@ -401,7 +417,7 @@ def main_app_ui():
     st.markdown("---")
 
     st.markdown("""
-    **Bienvenue!** Je suis votre **Tuteur IA spécialisé**, prêt à vous aider à résoudre vos problèmes de mathématiques. Vous pouvez poser une question ou **télécharger une image** de l'exercice.
+    **Bienvenue!** Je suis votre **Tuteur IA spécialisé**, prêt à vous aider à résoudre vos problèmes de mathématiques. Vous pouvez poser une question أو **télécharger une image** de l'exercice.
     """)
 
     uploaded_file = st.file_uploader(
@@ -497,3 +513,5 @@ else:
     
     st.sidebar.markdown("---")
     st.sidebar.button("Déconnexion", on_click=handle_logout, use_container_width=True)
+
+
