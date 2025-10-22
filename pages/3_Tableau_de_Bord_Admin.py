@@ -6,8 +6,13 @@ from datetime import date
 
 # --- 1. Importations و Constants (Doivent تكون هي نفسها في Accueil.py) ---
 try:
-    # يجب أن تكون هذه المتغيرات constants في كل ملف
-    ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "ahmadzaoujal2009@gmail.com")
+    # يقرأ البريد الإلكتروني للمسؤول من st.secrets
+    ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL")
+    
+    if not ADMIN_EMAIL:
+        st.error("خطأ في الإعداد: متغيّر ADMIN_EMAIL مفقود في ملف .streamlit/secrets.toml. يرجى إضافته.")
+        st.stop()
+        
     MAX_REQUESTS = 5 
     SUPABASE_TABLE_NAME = "users"
     supabase_url: str = st.secrets["SUPABASE_URL"]
@@ -29,8 +34,10 @@ except Exception as e:
     st.stop()
 
 # --- 3. التحقق من المسؤولية ---
+# التحقق من أن المستخدم مسجل الدخول وأن بريده الإلكتروني يطابق ADMIN_EMAIL
 if st.session_state.get('auth_status') != 'logged_in' or st.session_state.get('user_email') != ADMIN_EMAIL:
     st.error("وصول محظور. هذه الصفحة مخصصة للمسؤول فقط.")
+    st.info(f"يجب تسجيل الدخول بالبريد الإلكتروني للمسؤول: `{ADMIN_EMAIL}`")
     st.stop()
 
 # --- 4. دالة تحديث بيانات المستخدم (باستخدام مفتاح الخدمة) ---
@@ -72,7 +79,7 @@ def get_all_users_securely():
 st.title("👑 لوحة تحكم المسؤول (Admin Dashboard)")
 st.markdown("---")
 
-st.info("عرض شامل للمستخدمين وإدارة الامتيازات (أسئلة إضافية واستخدام غير محدود).")
+st.info(f"أنت مسجل الدخول كمسؤول رئيسي: **{ADMIN_EMAIL}**")
 
 all_users = get_all_users_securely()
 
@@ -136,5 +143,4 @@ else:
                         'is_unlimited': bool(new_unlimited)
                     }
                     update_user_data_admin(email, data_to_update)
-
 
