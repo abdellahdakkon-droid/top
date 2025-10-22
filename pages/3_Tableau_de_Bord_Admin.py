@@ -7,7 +7,7 @@ from datetime import date
 # --- 1. Importations و Constants (Doivent تكون هي نفسها في Accueil.py) ---
 try:
     # يجب أن تكون هذه المتغيرات constants في كل ملف
-    ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "admin@example.com")
+    ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "ahmadzaoujal2009@gmail.com")
     MAX_REQUESTS = 5 
     SUPABASE_TABLE_NAME = "users"
     supabase_url: str = st.secrets["SUPABASE_URL"]
@@ -136,4 +136,5 @@ else:
                         'is_unlimited': bool(new_unlimited)
                     }
                     update_user_data_admin(email, data_to_update)
+
 
