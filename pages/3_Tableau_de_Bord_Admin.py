@@ -1,118 +1,139 @@
 # -*- coding: utf-8 -*-
-
 import streamlit as st
+import time
 from supabase import create_client, Client
 from datetime import date
-import bcrypt # Nécessaire pour les fonctions partagées
 
-# Constantes
-ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "admin@example.com")
-MAX_REQUESTS = 5
-SUPABASE_TABLE_NAME = "users"
-
-# --- 1. Initialisation Supabase Client ---
+# --- 1. Importations و Constants (Doivent تكون هي نفسها في Accueil.py) ---
 try:
+    # يجب أن تكون هذه المتغيرات constants في كل ملف
+    ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "admin@example.com")
+    MAX_REQUESTS = 5 
+    SUPABASE_TABLE_NAME = "users"
     supabase_url: str = st.secrets["SUPABASE_URL"]
-    
-    # Pour les opérations admin, nous avons besoin de la clé de service
-    try:
-        service_key = st.secrets["SUPABASE_SERVICE_KEY"]
-    except KeyError:
-        st.error("Erreur: Clé de service Supabase (SUPABASE_SERVICE_KEY) manquante. Accès refusé.")
-        st.stop()
+    service_key = st.secrets["SUPABASE_SERVICE_KEY"]
+except KeyError:
+    st.error("خطأ في الإعداد: مفاتيح Supabase (URL أو SERVICE_KEY) مفقودة.")
+    st.stop()
+except Exception as e:
+    st.error(f"خطأ في تحميل الإعدادات: {e}")
+    st.stop()
 
+# --- 2. الإتصال بـ Supabase (بمفتاح الخدمة) ---
+# هذا العميل يتمتع بامتيازات مطلقة
+try:
     admin_client: Client = create_client(supabase_url, service_key)
     users_table = admin_client.table(SUPABASE_TABLE_NAME)
-
 except Exception as e:
-    st.error(f"Erreur d'initialisation Supabase pour l'Admin: {e}")
+    st.error(f"فشل اتصال مسؤول Supabase: {e}")
     st.stop()
 
-# --- Fonctions de Traitement ---
+# --- 3. التحقق من المسؤولية ---
+if st.session_state.get('auth_status') != 'logged_in' or st.session_state.get('user_email') != ADMIN_EMAIL:
+    st.error("وصول محظور. هذه الصفحة مخصصة للمسؤول فقط.")
+    st.stop()
 
-def update_user_data(email, data: dict, client_to_use):
-    """Met à jour les données utilisateur en utilisant le client Admin."""
+# --- 4. دالة تحديث بيانات المستخدم (باستخدام مفتاح الخدمة) ---
+
+def update_user_data_admin(email, data: dict):
+    """
+    تحديث بيانات المستخدم باستخدام client المسؤول (Service Key).
+    تتم إعادة تشغيل التطبيق بعد التحديث.
+    """
     try:
-        response = client_to_use.table(SUPABASE_TABLE_NAME).update(data).eq("email", email).execute()
-        return response.data is not None
+        response = admin_client.table(SUPABASE_TABLE_NAME).update(data).eq("email", email).execute()
+        if response.data:
+            # مسح الذاكرة المؤقتة للوظيفة الرئيسية لتحميل البيانات الجديدة
+            get_all_users_securely.clear()
+            st.success(f"تم تحديث بيانات {email} بنجاح!")
+            time.sleep(0.5)
+            st.experimental_rerun()
+            return True
+        return False
     except Exception as e:
-        st.error(f"Erreur de mise à jour: {e}")
+        st.error(f"خطأ في التحديث: {e}")
         return False
 
-def toggle_unlimited_use(target_email, current_status):
-    new_status = not current_status
-    
-    if update_user_data(target_email, {'is_unlimited': new_status}, admin_client):
-        st.success(f"Utilisateur **{target_email}** mis à jour: Utilisation illimitée = {new_status}")
-    else:
-        st.error(f"Échec de la mise à jour de l'utilisateur {target_email}")
+# --- 5. دالة قراءة جميع المستخدمين (للتخزين المؤقت) ---
 
+@st.cache_data(ttl=60)
+def get_all_users_securely():
+    """قراءة جميع المستخدمين باستخدام مفتاح الخدمة."""
+    try:
+        # نحن نستخدم admin_client الذي تم إعداده بالفعل بمفتاح الخدمة
+        response = admin_client.table(SUPABASE_TABLE_NAME).select("*").execute()
+        return [user for user in response.data if user['email'] != ADMIN_EMAIL]
+    except Exception as e:
+        st.error(f"فشل في استرداد قائمة المستخدمين: {e}")
+        return []
 
-# --- UI de la Page ---
+# --- 6. واجهة المستخدم (UI) ---
 
-if st.session_state.auth_status != 'logged_in' or st.session_state.user_email != ADMIN_EMAIL:
-    st.error("Accès Refusé. Cette page est réservée à l'administrateur.")
-    st.stop()
-
-
-st.title("👑 Tableau de Bord Administrateur")
+st.title("👑 لوحة تحكم المسؤول (Admin Dashboard)")
 st.markdown("---")
 
-st.info("Vue globale des utilisateurs et gestion des privilèges (Requiert SUPABASE_SERVICE_KEY).")
+st.info("عرض شامل للمستخدمين وإدارة الامتيازات (أسئلة إضافية واستخدام غير محدود).")
 
-# Récupération de tous les utilisateurs (sauf l'admin)
-try:
-    response = users_table.select("*").neq("email", ADMIN_EMAIL).execute()
-    all_users = response.data
-except Exception as e:
-    st.error(f"Échec de la récupération de la liste des utilisateurs: {e}")
-    all_users = []
+all_users = get_all_users_securely()
 
-# Statistiques globales
-total_users = len(all_users) + 1 # +1 pour l'admin
-
+# --- الإحصائيات العامة ---
+total_users = len(all_users)
 total_bonus_requests = sum(user.get('bonus_questions', 0) for user in all_users)
 successful_referrals = sum(1 for user in all_users if user.get('referred_by'))
 
 col1, col2, col3 = st.columns(3)
-col1.metric("Total Utilisateurs (Hors Admin)", len(all_users))
-col2.metric("Total Requêtes Bonus Distribuées", total_bonus_requests)
-col3.metric("Total Parrainages Réussis", successful_referrals)
+col1.metric("إجمالي المستخدمين", total_users)
+col2.metric("إجمالي طلبات المكافآت الموزعة", total_bonus_requests)
+col3.metric("إجمالي الإحالات الناجحة", successful_referrals)
 
 st.markdown("---")
 
-# Gestion des Utilisateurs et Privilèges
-st.subheader("Gestion des Privilèges Utilisateur")
+# --- إدارة الامتيازات لكل مستخدم ---
+st.subheader("إدارة امتيازات المستخدم")
 
 if not all_users:
-    st.write("Aucun utilisateur enregistré (à part l'administrateur).")
+    st.write("لا يوجد مستخدمون مسجلون بعد (باستثناء المسؤول).")
 else:
-    
-    # Affichage des utilisateurs sous forme de tableau interactif
     for user_data in all_users:
         email = user_data['email']
         is_unlimited = user_data.get('is_unlimited', False)
         bonus = user_data.get('bonus_questions', 0)
         requests_used = user_data.get('requests_today', 0)
         
-        # Affichage du statut
-        status_text = "ILLIMITÉ (VIP)" if is_unlimited else f"Limité ({requests_used}/{MAX_REQUESTS + bonus})"
-        status_color = "#28a745" if is_unlimited else "#ffc107"
+        max_total = MAX_REQUESTS + bonus
+        status_text = "✨ استخدام غير محدود (VIP)" if is_unlimited else f"محدود ({requests_used}/{max_total})"
         
-        with st.expander(f"**{email}** - {status_text}", expanded=False):
-            st.markdown(f"**E-mail:** `{email}`")
-            st.markdown(f"**Requêtes Bonus Gagnées:** {bonus}")
-            st.markdown(f"**Parrainé Par:** `{user_data.get('referred_by', 'N/A')}`")
-            st.markdown(f"**Statut Illimité:** {is_unlimited}")
+        
+        with st.expander(f"**{email}** | الحالة: {status_text}", expanded=False):
             
-            button_label = "Retirer Illimité" if is_unlimited else "Accorder Illimité"
-            button_key = f"toggle_{email}"
-            
-            st.button(
-                button_label,
-                key=button_key,
-                on_click=toggle_unlimited_use,
-                args=(email, is_unlimited),
-                type="primary",
-                use_container_width=True
-            )
+            # Form لإدارة الامتيازات
+            with st.form(key=f"form_update_{email}", clear_on_submit=False):
+                
+                st.caption(f"تمت الإحالة بواسطة: {user_data.get('referred_by', 'غير متوفر')}")
+                
+                # 1. الأسئلة الإضافية
+                new_bonus = st.number_input(
+                    "💰 عدد الأسئلة الإضافية الممنوحة:",
+                    min_value=0,
+                    value=bonus,
+                    step=10,
+                    key=f"bonus_{email}"
+                )
+
+                # 2. الوصول غير المحدود
+                new_unlimited = st.checkbox(
+                    "🔥 منح وصول غير محدود (VIP)",
+                    value=is_unlimited,
+                    key=f"unlimited_{email}"
+                )
+                
+                # زر الإرسال
+                submitted = st.form_submit_button("حفظ التغييرات", type="primary")
+
+                if submitted:
+                    data_to_update = {
+                        'bonus_questions': int(new_bonus),
+                        'is_unlimited': bool(new_unlimited)
+                    }
+                    update_user_data_admin(email, data_to_update)
+
