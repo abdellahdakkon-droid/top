@@ -2,11 +2,15 @@
 # Tuteur Mathématique IA (Système Éducatif Marocain) - Cleaned & Corrected
 
 import streamlit as st
-import requests
-import json
+# ❌ لم نعد بحاجة إلى requests و base64
+# import requests
+# import base64
+import json 
 import os
 import time
-import base64
+# 🌟 إضافة مكتبة Gemini SDK
+from google import genai
+from google.genai.errors import APIError # لمعالجة الأخطاء
 import bcrypt
 from PIL import Image
 from io import BytesIO
@@ -27,7 +31,7 @@ st.set_page_config(
 MAX_REQUESTS = 5
 REFERRAL_BONUS = 10
 REFERRAL_PARAM = "ref_code"
-max_retries = 3
+max_retries = 3 # لم نعد نستخدم هذا في SDK، لكنه لا يضر
 COOKIE_KEY_EMAIL = "user_auth_email"
 SUPABASE_TABLE_NAME = "users"
 
@@ -36,19 +40,28 @@ try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
     SUPABASE_URL: str = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY: str = st.secrets["SUPABASE_KEY"]
-    SERVICE_KEY = st.secrets.get("SUPABASE_SERVICE_KEY") # Service key pour les opérations admin/bonus
+    SERVICE_KEY = st.secrets.get("SUPABASE_SERVICE_KEY") 
 except KeyError as e:
     st.error(f"Erreur de configuration: Clé manquante dans secrets.toml: {e}. L'application ne démarrera pas correctement.")
     st.stop()
     
-API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent"
+# ❌ إزالة API_URL لم يعد مطلوباً
+# API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent"
 
-# --- II. Initialisation des Clients et de l'État ---
+# 🌟 التعديل 1: تهيئة عميل Gemini SDK
+try:
+    GEMINI_CLIENT = genai.Client(api_key=API_KEY)
+except Exception as e:
+    st.error(f"Erreur d'initialisation Gemini SDK: {e}")
+    st.stop()
+
+
+# --- II. Initialisation des Clients et de l'État (لا تغيير) ---
 
 # 1. Initialisation des Cookies
 cookies = EncryptedCookieManager(
     prefix="gemini_math_app/",
-    password=st.secrets.get("COOKIE_PASSWORD", "super_secret_default_key"), # Utilisez un mot de passe fort ici
+    password=st.secrets.get("COOKIE_PASSWORD", "super_secret_default_key"), 
 )
 if not cookies.ready():
     st.stop()
@@ -70,7 +83,7 @@ if 'is_unlimited' not in st.session_state: st.session_state.is_unlimited = False
 if 'should_rerun' not in st.session_state: st.session_state.should_rerun = False
 
 
-# --- III. Fonctions de Base (Supabase & Crypto) ---
+# --- III. Fonctions de Base (Supabase & Crypto) (لا تغيير) ---
 
 def get_supabase_client(use_service_key: bool = False) -> Client:
     """Retourne le client Supabase standard ou le client avec clé de service."""
@@ -116,29 +129,10 @@ def update_user_data(email, data: dict, use_service_key=False):
 
 # --- IV. Logique de l'API Gemini ---
 
-def get_image_part(uploaded_file):
-    """Crée la partie 'inlineData' pour l'API Gemini."""
-    if uploaded_file is None:
-        return None
-        
-    bytes_data = uploaded_file.getvalue()
-    mime_type = uploaded_file.type
-    
-    # Validation du format (même si Streamlit filtre, c'est une bonne pratique)
-    if mime_type not in ["image/png", "image/jpeg", "image/jpg"]:
-        st.warning("تنسيق صورة غير مدعوم. نرجو استخدام JPG أو PNG.")
-        return None
-            
-    base64_encoded_data = base64.b64encode(bytes_data).decode('utf-8')
-    return {
-        "inlineData": {
-            "data": base64_encoded_data,
-            "mimeType": mime_type
-        }
-    }
+# ❌ حذف دالة get_image_part بالكامل
 
 def build_system_prompt():
-    """Construit la System Instruction complète, en évitant les formats risqués."""
+    """Construit la System Instruction complète."""
     user_data = st.session_state.user_data
     school_level = user_data.get('school_level', 'Tronc Commun')
     response_type = user_data.get('response_type', 'steps')
@@ -150,7 +144,7 @@ def build_system_prompt():
         "Ta mission est de fournir une assistance précise et didactique. Si une image est fournie, tu dois l'analyser et résoudre le problème."
     )
     
-    # Style de réponse (sans formatage Markdown ici)
+    # Style de réponse 
     if response_type == 'answer':
         style_instruction = "Fournis uniquement la réponse finale et concise du problème, sans aucune explication détaillée ni étapes intermédiaires."
     elif response_type == 'concept':
@@ -164,20 +158,19 @@ def build_system_prompt():
     # Instruction finale (demander Markdown/LaTeX pour la sortie)
     final_prompt = (
         f"{base_prompt} {lang_instruction} {style_instruction} "
-        "Utilise le format Markdown pour organiser ta réponse, et assure-toi que les formules mathématiques sont formatées en LaTeX."
+        "Utilise le format Markdown pour organiser ta réponse، et assure-toi que les formules mathématiques sont formatées en LaTeX."
     )
     return final_prompt
 
-# Utilisez @st.cache_data أو @st.cache_resource حسب طبيعة الدالة
-# هنا نستخدمها بدون ديكورات Streamlit المباشرة لتجنب المشاكل في البيئات المعقدة
 def stream_text_simulation(text):
     """Simule la frappe de texte pour une meilleure UX."""
     for chunk in text.split():
         yield chunk + " "
         time.sleep(0.02)
 
-def call_gemini_api(prompt: str, image_part=None):
-    """Appelle l'API Gemini مع gestion des limites et des erreurs."""
+# 🌟 دالة call_gemini_api المُحدَّثة لاستخدام SDK 🌟
+def call_gemini_api(prompt: str, uploaded_file=None):
+    """Appelle l'API Gemini en utilisant le SDK لحل مشكلة 400."""
     
     email = st.session_state.user_email
     user_data = st.session_state.user_data
@@ -190,7 +183,6 @@ def call_gemini_api(prompt: str, image_part=None):
         # Réinitialisation du compteur si la date a changé
         if user_data.get('last_request_date') != current_date_str:
             st.session_state.requests_today = 0
-            # Mise à jour immédiate de la DB (pas critique de l'attendre)
             update_user_data(email, {'requests_today': 0, 'last_request_date': current_date_str})
 
         current_count = st.session_state.requests_today
@@ -199,87 +191,67 @@ def call_gemini_api(prompt: str, image_part=None):
             st.error(f"Limite atteinte: Vous avez atteint le maximum de requêtes ({max_total_requests}) pour aujourd'hui. Revenez demain!")
             return "Limite de requêtes atteinte.", []
             
-        st.session_state.requests_today = current_count + 1 # Incrémenter avant l'appel
+        st.session_state.requests_today = current_count + 1 # Incrémenter قبل الاتصال
 
-    # 2. Construction du Payload
+    # 2. بناء الـ Contents والتعليمات المخصصة
     final_system_prompt = build_system_prompt()
+    contents = []
     
-    contents_parts = []
-    if image_part: contents_parts.append(image_part)
-    if prompt: contents_parts.append({"text": prompt})
+    if uploaded_file is not None:
+        try:
+            # SDK يستقبل كائن PIL.Image مباشرة
+            uploaded_file.seek(0) # للعودة إلى بداية الملف قبل القراءة
+            image = Image.open(uploaded_file)
+            contents.append(image)
+        except Exception:
+            return "تعذّر معالجة الصورة. تأكد من أن التنسيق هو JPG أو PNG.", []
+    
+    if prompt: 
+        contents.append(prompt)
         
-    if not contents_parts:
+    if not contents:
         return "Veuillez fournir une question ou une image.", []
 
-    payload = {
-        "contents": [{"parts": contents_parts}],
-        "tools": [{"google_search": {} }],
-        "config": {
-            "systemInstruction": final_system_prompt,
-        }
-    }
-
-    headers = { 'Content-Type': 'application/json' }
-
-    # 3. Mécanisme de Ré-essai (Retry Loop)
-    for attempt in range(max_retries):
-        try:
-            full_url = f"{API_URL}?key={API_KEY}"
-            response = requests.post(full_url, headers=headers, data=json.dumps(payload))
-            response.raise_for_status() # Lève une erreur pour les codes 4XX/5XX
+    # 3. الاتصال بالـ API باستخدام SDK
+    try:
+        response = GEMINI_CLIENT.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=contents,
+            # تمرير System Instruction و Tools عبر Config
+            config={
+                "system_instruction": final_system_prompt,
+                "tools": [{"google_search": {} }]
+            }
+        )
+        
+        # 4. تحديث العداد في Supabase بعد النجاح
+        if not user_data.get('is_unlimited', False):
+            update_user_data(email, {'requests_today': st.session_state.requests_today, 'last_request_date': current_date_str})
             
-            result = response.json()
-            
-            # Mise à jour du compteur dans Supabase APRES succès (si non illimité)
-            if not user_data.get('is_unlimited', False):
-                update_user_data(email, {'requests_today': st.session_state.requests_today, 'last_request_date': current_date_str})
-                
-            # Extraction de la réponse et des sources
-            candidate = result.get('candidates', [None])[0]
-            if candidate and candidate.get('content') and candidate['content'].get('parts'):
-                generated_text = candidate['content']['parts'][0].get('text', "Aucun texte trouvé.")
-                
-                sources = []
-                grounding_metadata = candidate.get('groundingMetadata')
-                if grounding_metadata and grounding_metadata.get('groundingAttributions'):
-                    sources = [
-                        {'uri': attr.get('web', {}).get('uri'), 'title': attr.get('web', {}).get('title')}
-                        for attr in grounding_metadata['groundingAttributions']
-                        if attr.get('web', {}).get('title')
-                    ]
-                
-                return generated_text, sources
-            else:
-                return "Désolé, le modèle n'a pas pu fournir de réponse. Veuillez réessayer.", []
+        # 5. استخراج الإجابة والمصادر
+        generated_text = response.text
+        
+        sources = []
+        if response.candidates and response.candidates[0].grounding_metadata:
+            for attribution in response.candidates[0].grounding_metadata.grounding_attributions:
+                if attribution.web and attribution.web.title:
+                    sources.append({
+                        'uri': attribution.web.uri,
+                        'title': attribution.web.title
+                    })
 
-        except requests.exceptions.HTTPError as e:
-            error_details = response.text
-            # Diagnostic spécifique de l'erreur 400
-            if response.status_code == 400 and 'system_instruction' in error_details:
-                 st.error("❌ **Erreur d'Argument (Code 400)**: La 'System Instruction' est invalide (longueur ou format non supporté par l'API). **Veuillez contacter le développeur.**")
-                 return f"Échec final (Code 400). Cause probable: systemInstruction non valide.", []
-                 
-            st.error(f"Échec de la connexion (Tentative {attempt + 1}/{max_retries}, Code {response.status_code}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
-                continue
-            
-            return f"Échec final de la connexion (Code {response.status_code}). Vérifiez la clé API ou l'erreur du serveur.", []
+        return generated_text, sources
 
-        except requests.exceptions.RequestException as e:
-            st.error(f"Erreur réseau (Tentative {attempt + 1}/{max_retries}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
-                continue
-            return f"Échec de la connexion après {max_retries} tentatives.", []
-            
-        except Exception as e:
-            return f"خطأ غير متوقع: {e}", []
+    except APIError as e:
+        # معالجة أخطاء API المحددة
+        st.error(f"❌ Erreur API (Code {e.code}): {e.message}")
+        return f"Échec de l'API Gemini (Code {e.code}). Cause probable: {e.message}", []
     
-    return "فشل توليد الإجابة.", []
+    except Exception as e:
+        st.error(f"خطأ غير متوقع: {e}")
+        return f"خطأ غير متوقع: {e}", []
 
-
-# --- V. Fonctions d'Authentification et de Session ---
+# --- V. Fonctions d'Authentification et de Session (لا تغيير) ---
 
 def load_user_session(email, save_cookie=False):
     """Charge les données utilisateur et met à jour la session."""
@@ -322,7 +294,7 @@ def handle_login():
         st.error("E-mail ou mot de passe incorrect.")
 
 def handle_register():
-    """Gère l'inscription et le parrainage."""
+    """Gère l'inscription و Parrainage."""
     email = st.session_state.reg_email.lower()
     password = st.session_state.reg_password
     confirm_password = st.session_state.reg_password_confirm
@@ -347,14 +319,14 @@ def handle_register():
         if isinstance(potential_referrer_email, list): potential_referrer_email = potential_referrer_email[0]
             
         referrer_data = get_user_by_email(potential_referrer_email)
-        if referrer_data and referrer_data['email'] != email: # Éviter l'auto-parrainage
+        if referrer_data and referrer_data['email'] != email: 
             referrer_email = potential_referrer_email
             current_bonus = referrer_data.get('bonus_questions', 0)
             new_bonus = current_bonus + REFERRAL_BONUS
             
             # Utilisation de la clé de service pour l'opération d'écriture (plus sûr)
             if update_user_data(referrer_email, {'bonus_questions': new_bonus}, use_service_key=True):
-                 st.info(f"Félicitations! Le parrain ({referrer_email}) a reçu {REFERRAL_BONUS} questions bonus.")
+                st.info(f"Félicitations! Le parrain ({referrer_email}) a reçu {REFERRAL_BONUS} questions bonus.")
             
     # Sauvegarder le nouvel utilisateur
     new_user_data = {
@@ -362,7 +334,7 @@ def handle_register():
         'password_hash': hash_password(password),
         'lang': 'fr',
         'response_type': 'steps',
-        'school_level': 'Classes Préparatoires', # Niveau par défaut plus pertinent pour un tuteur avancé
+        'school_level': 'Classes Préparatoires', 
         'is_unlimited': False,
         'requests_today': 0,
         'last_request_date': str(date.today()),
@@ -429,9 +401,13 @@ def main_app_ui():
             type=["png", "jpg", "jpeg"],
             key="image_uploader"
         )
-        image_part_to_send = get_image_part(uploaded_file)
-        if uploaded_file and image_part_to_send:
+        # ❌ حذف منطق get_image_part
+        # image_part_to_send = get_image_part(uploaded_file) 
+        
+        if uploaded_file: 
             try:
+                # نحتاج إلى إعادة التموضع في البداية للعرض
+                uploaded_file.seek(0)
                 image = Image.open(BytesIO(uploaded_file.getvalue()))
                 st.image(image, caption='Image téléchargée.', use_column_width=True)
             except Exception:
@@ -447,20 +423,19 @@ def main_app_ui():
         if st.button("Générer la Réponse Mathématique", use_container_width=True, type="primary"):
             if not user_prompt and not uploaded_file:
                 st.warning("Veuillez entrer une question ou télécharger une image pour commencer.")
-            elif uploaded_file and image_part_to_send is None:
-                st.error("تعذّر معالجة الصورة. تأكد من أن التنسيق هو JPG أو PNG.")
+            # 🌟 تم تمرير uploaded_file مباشرة، ولم نعد نتحقق من image_part_to_send
             else:
                 with st.spinner('L\'IA analyse et prépare la réponse...'):
-                    generated_text, sources = call_gemini_api(user_prompt, image_part_to_send)
+                    # 🌟 التعديل 2: تمرير uploaded_file مباشرة إلى دالة API
+                    generated_text, sources = call_gemini_api(user_prompt, uploaded_file)
                 
                 st.subheader("✅ Réponse Générée :")
                 
-                if generated_text and "Limite de requêtes atteinte" not in generated_text and "Échec final" not in generated_text:
+                if generated_text and "Limite de requêtes atteinte" not in generated_text and "Échec de l'API Gemini" not in generated_text:
                     st.write_stream(stream_text_simulation(generated_text))
                     
                     if sources:
                         st.subheader("🌐 Sources Citées :")
-                        # Utilisation d'un set pour les sources uniques
                         unique_sources = set((s['title'], s['uri']) for s in sources if s['uri'] and s['title'])
                         source_markdown = "\n".join([f"- [{title}]({uri})" for title, uri in unique_sources])
                         st.markdown(source_markdown)
@@ -498,13 +473,13 @@ def main_app_ui():
         st.session_state.should_rerun = True
 
 
-# --- VII. Contrôle du Flux Principal ---
+# --- VII. Contrôle du Flux الرئيسي (لا تغيير) ---
 
 # 1. Vérification du Cookie au démarrage (Tentative d'auto-connexion)
 if st.session_state.auth_status == 'logged_out':
     remembered_email = cookies.get(COOKIE_KEY_EMAIL)
     if remembered_email:
-        load_user_session(remembered_email) # load_user_session met should_rerun à True si succès
+        load_user_session(remembered_email) 
         
 # 2. Affichage de l'UI
 if st.session_state.auth_status == 'logged_out':
@@ -515,4 +490,4 @@ else:
 # 3. Traitement de l'auto-rerun (Une seule fois après l'auth)
 if st.session_state.should_rerun:
     st.session_state.should_rerun = False
-    st.rerun() # Redémarrage pour mettre à jour la session
+    st.rerun()
