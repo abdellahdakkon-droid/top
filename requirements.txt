@@ -1,7 +1,7 @@
 streamlit
 requests
 Pillow
-supabase
-streamlit-cookies-manager
-bcrypt  
-google-genai 
+supabases
+treamlit-cookies-manager
+bcrypt
+google-genai
