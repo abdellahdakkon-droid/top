@@ -168,7 +168,8 @@ def build_system_prompt():
     )
     return final_prompt
 
-@st.cache_resource
+# Utilisez @st.cache_data أو @st.cache_resource حسب طبيعة الدالة
+# هنا نستخدمها بدون ديكورات Streamlit المباشرة لتجنب المشاكل في البيئات المعقدة
 def stream_text_simulation(text):
     """Simule la frappe de texte pour une meilleure UX."""
     for chunk in text.split():
@@ -176,7 +177,7 @@ def stream_text_simulation(text):
         time.sleep(0.02)
 
 def call_gemini_api(prompt: str, image_part=None):
-    """Appelle l'API Gemini avec gestion des limites et des erreurs."""
+    """Appelle l'API Gemini مع gestion des limites et des erreurs."""
     
     email = st.session_state.user_email
     user_data = st.session_state.user_data
@@ -342,7 +343,7 @@ def handle_register():
     query_params = st.query_params
     
     if REFERRAL_PARAM in query_params:
-        potential_referrer_email = query_params[REFERRAL_PARAM]
+        potential_referrer_email = query_params.get(REFERRAL_PARAM)
         if isinstance(potential_referrer_email, list): potential_referrer_email = potential_referrer_email[0]
             
         referrer_data = get_user_by_email(potential_referrer_email)
@@ -359,8 +360,8 @@ def handle_register():
     new_user_data = {
         'email': email,
         'password_hash': hash_password(password),
-        'lang': 'fr', 
-        'response_type': 'steps', 
+        'lang': 'fr',
+        'response_type': 'steps',
         'school_level': 'Classes Préparatoires', # Niveau par défaut plus pertinent pour un tuteur avancé
         'is_unlimited': False,
         'requests_today': 0,
@@ -401,7 +402,7 @@ def auth_ui():
             st.text_input("Confirmer le mot de passe", type="password", key="reg_password_confirm")
             
             st.subheader("Vos Préférences par Défaut")
-            st.caption("Compte configuré par défaut: **Français** (Étapes détaillées, niveau **Classes Préparatoires**).")
+            st.caption("Compte configuré par défaut: **Français** (Étapes détaillées، niveau **Classes Préparatoires**).")
 
             query_params = st.query_params
             if REFERRAL_PARAM in query_params:
@@ -424,7 +425,7 @@ def main_app_ui():
     
     with col_upload:
         uploaded_file = st.file_uploader(
-            "Optionnel : Téléchargez une photo (JPG / PNG, max 4 Mo).",
+            "Optionnel : Téléchargez une photo (JPG / PNG، max 4 Mo).",
             type=["png", "jpg", "jpeg"],
             key="image_uploader"
         )
@@ -515,4 +516,3 @@ else:
 if st.session_state.should_rerun:
     st.session_state.should_rerun = False
     st.rerun() # Redémarrage pour mettre à jour la session
-
