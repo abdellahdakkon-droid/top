@@ -13,7 +13,7 @@ from io import BytesIO
 from datetime import date, timedelta
 from urllib.parse import urlparse, parse_qs
 
-# *** Librairies Nécessaires ***
+# *** Librairies Nécessaire ***
 from supabase import create_client, Client
 from streamlit_cookies_manager import EncryptedCookieManager
 
@@ -256,9 +256,12 @@ def handle_logout():
         del st.session_state['user_email']
     if 'auth_status' in st.session_state:
         del st.session_state['auth_status']
+    if 'user_data' in st.session_state:
+        del st.session_state['user_data']
     
     # 2. مسح الكوكيز
-    cookies.delete(COOKIE_KEY_EMAIL)
+    # **التصحيح هنا**: استخدام الطريقة الصحيحة لمكتبة EncryptedCookieManager
+    cookies[COOKIE_KEY_EMAIL] = None  # تعيين قيمة الكوكي على None لحذفه
     cookies.save()
     
     st.info("تم تسجيل الخروج بنجاح. يتم تحديث الصفحة...")
