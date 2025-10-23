@@ -167,12 +167,13 @@ def call_gemini_api(prompt, image_part=None):
         current_count = st.session_state.requests_today
 
         if current_count >= max_total_requests:
-            st.error(f"Limite atteinte : Vous avez atteint le maximum de requêtes ({max_total_requests}) pour aujourd'hui. Revenez demain ou consultez la page 'Affiliation' pour gagner plus de requêtes.")
+            st.error(f"Limite atteinte : Vous avez atteint le maximum de requêtes ({max_total_requests}) pour aujourd'hui. Revenez demain أو consultez la page 'Affiliation' pour gagner plus de requêtes.")
             return "Limite de requêtes atteinte.", []
             
         st.session_state.requests_today = current_count + 1
 
     # Construction des instructions pour le modèle
+    # Utilisation des préférences stockées dans Supabase (ou les valeurs par défaut)
     lang = user_data.get('lang', 'fr')
     response_type = user_data.get('response_type', 'steps')
     school_level = user_data.get('school_level', 'Tronc Commun')
@@ -249,25 +250,9 @@ def call_gemini_api(prompt, image_part=None):
 
 # --- Fonctions d'Authentification ---
 
-def handle_logout():
-    """تنهي جلسة المستخدم الحالي وتمسح حالة المصادقة من الكوكيز."""
-    # 1. مسح حالة الجلسة
-    if 'user_email' in st.session_state:
-        del st.session_state['user_email']
-    if 'auth_status' in st.session_state:
-        del st.session_state['auth_status']
-    if 'user_data' in st.session_state:
-        del st.session_state['user_data']
-    
-    # 2. مسح الكوكيز
-    # التصحيح الآن: استخدام 'del' لإزالة المفتاح بدلاً من تعيينه لـ None لتجنب مشكلة .encode()
-    if COOKIE_KEY_EMAIL in cookies:
-        del cookies[COOKIE_KEY_EMAIL]
-    cookies.save()
-    
-    # تم إزالة st.info() لتجنب تضارب العرض مع st.experimental_rerun()
-    st.experimental_rerun()
-
+# *********************************************************
+# دالة handle_logout تم حذفها بناءً على طلب المستخدم بعد إزالة زرها.
+# *********************************************************
 
 def load_user_session(email, save_cookie=False):
     user_data = get_user_by_email(email)
@@ -279,6 +264,7 @@ def load_user_session(email, save_cookie=False):
             
         st.session_state.user_email = email
         st.session_state.user_data = user_data
+        # تحميل القيم من قاعدة البيانات (ستكون القيم الافتراضية إذا تم التسجيل الآن)
         st.session_state.user_lang = user_data.get('lang', 'fr')
         st.session_state.response_type = user_data.get('response_type', 'steps')
         st.session_state.school_level = user_data.get('school_level', 'Tronc Commun')
@@ -309,7 +295,7 @@ def handle_login():
         load_user_session(email, save_cookie=True)
         st.experimental_rerun()
     else:
-        st.error("E-mail ou mot de passe incorrect.")
+        st.error("E-mail أو mot de passe incorrect.")
 
 def handle_register():
     """Traite l'inscription, vérifie le code de parrainage et accorde la récompense."""
@@ -353,9 +339,10 @@ def handle_register():
     new_user_data = {
         'email': email,
         'password_hash': hash_password(password),
-        'lang': st.session_state.reg_lang,
-        'response_type': st.session_state.reg_response_type,
-        'school_level': st.session_state.reg_school_level,
+        # VALEURS الافتراضية الثابتة (لأن الخيارات أزيلت من الواجهة)
+        'lang': 'fr', 
+        'response_type': 'steps', 
+        'school_level': 'Tronc Commun',
         'is_unlimited': False,
         'requests_today': 0,
         'last_request_date': str(date.today()),
@@ -393,15 +380,10 @@ def auth_ui():
             st.text_input("Mot de passe", type="password", key="reg_password")
             st.text_input("Confirmer le mot de passe", type="password", key="reg_password_confirm")
             
-            st.subheader("Vos Préférences (Éducation Marocaine)")
-            
-            school_levels = ['Tronc Commun', '1ère Année Bac (Sciences)', '2ème Année Bac (Sciences Maths A)', '2ème Année Bac (Sciences Maths B)', '2ème Année Bac (Sciences Expérimentales)', 'Écoles Supérieures/Classes Préparatoires']
-            st.selectbox("Niveau Scolaire", options=school_levels, key="reg_school_level")
-            
-            st.radio("Langue Préférée", options=['fr', 'ar'], format_func=lambda x: 'Français' if x == 'fr' else 'Arabe', key="reg_lang")
-            
-            response_options = {'answer': 'Réponse Finale Seulement', 'steps': 'Étapes Détaillées', 'explanation': 'Explication Conceptuelle'}
-            st.selectbox("Type de Réponse par Défaut", options=list(response_options.keys()), format_func=lambda x: response_options[x], key="reg_response_type")
+            # --- تم إزالة جميع خيارات التفضيلات هنا ---
+            st.subheader("Vos Préférences par Défaut")
+            st.caption("Votre compte سيكون مكوّناً بشكل افتراضي على: **الفرنسية** (الإجابة عبر **الخطوات التفصيلية**، والمستوى الدراسي **الجذع المشترك**).")
+
 
             # Affiche si un code de parrainage est détecté dans l'URL
             query_params = st.query_params
@@ -421,7 +403,7 @@ def main_app_ui():
     st.markdown("---")
 
     st.markdown("""
-    **Bienvenue!** Je suis votre **Tuteur IA spécialisé**, prêt à vous aider à résoudre vos problèmes de mathématiques. Vous pouvez poser une question أو **télécharger une image** de l'exercice.
+    **Bienvenue!** أنا **مساعدك الذكي المتخصص**، جاهز لمساعدتك في حل مسائل الرياضيات الخاصة بك. يمكنك طرح سؤال أو **تحميل صورة** للتمرين.
     """)
 
     uploaded_file = st.file_uploader(
@@ -439,14 +421,14 @@ def main_app_ui():
             st.error(f"Erreur lors du chargement de l'image : {e}")
 
     user_prompt = st.text_area(
-        "Ajoutez votre question ou votre instruction ici (même si vous avez téléchargت une image).",
+        "Ajoutez votre question ou votre instruction ici (même si vous avez téléchargé une image).",
         height=100,
         key="prompt_input"
     )
 
     if st.button("Générer la Réponse Mathématique", use_container_width=True, type="primary"):
         if not user_prompt and not uploaded_file:
-            st.warning("Veuillez entrer une question ou télécharger une image pour commencer la génération.")
+            st.warning("Veuillez entrer une question أو télécharger une image pour commencer la génération.")
         else:
             if uploaded_file and uploaded_file.size > 4 * 1024 * 1024:
                 st.error("L'image est trop volumineuse. Veuillez télécharger un fichier de moins de 4 Mo.")
@@ -486,14 +468,14 @@ if st.session_state.auth_status == 'logged_out':
     remembered_email = cookies.get(COOKIE_KEY_EMAIL)
     if remembered_email:
         if load_user_session(remembered_email):
-            st.toast(f"Bienvenue, {remembered_email.split('@')[0]}! Connexion automatique.")
+            st.toast(f"Bienvenue، {remembered_email.split('@')[0]}! Connexion automatique.")
             st.rerun()
             
 # 2. Affichage de l'interface appropriée
 if st.session_state.auth_status == 'logged_out':
     auth_ui()
 else:
-    # Si l'utilisateur est connecté, affiche l'UI principale
+    # Si l'utilisateur est connecté، affiche l'UI principale
     main_app_ui()
 
     # Barre latérale pour le statut
@@ -516,7 +498,5 @@ else:
     """, unsafe_allow_html=True)
     
     st.sidebar.markdown("---")
-    st.sidebar.button("Déconnexion", on_click=handle_logout, use_container_width=True)
-
 
 
