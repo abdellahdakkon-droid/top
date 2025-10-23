@@ -466,13 +466,23 @@ def profile_ui():
     
     current_data = st.session_state.user_data
     
+    # Correction: Normaliser la valeur de la langue pour la selectbox
+    # Cela يسمح بـ gerer les anciennes valeurs stockees (ex: 'fr' au lieu de 'Francais')
+    db_lang = current_data.get('lang', 'Francais')
+    lang_options = ['Francais', 'Anglais']
+    
+    if db_lang not in lang_options:
+        safe_lang = 'Francais' # Default to Francais if the value is corrupted or legacy ('fr')
+    else:
+        safe_lang = db_lang
+
     # Selectbox de la langue de reponse (AI)
     st.sidebar.subheader("Langue de Reponse de l'AI")
     st.sidebar.selectbox(
         "Choisissez la langue des reponses mathematiques:",
-        options=['Francais', 'Anglais'],
+        options=lang_options,
         key='settings_lang',
-        index=['Francais', 'Anglais'].index(current_data.get('lang', 'Francais'))
+        index=lang_options.index(safe_lang) # Use the safe_lang
     )
 
     # Selectbox du type de reponse
@@ -638,5 +648,6 @@ def main():
 # --- Execution ---
 if __name__ == '__main__':
     main()
+
 
 
