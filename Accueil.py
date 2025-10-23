@@ -20,7 +20,7 @@ from streamlit_cookies_manager import EncryptedCookieManager
 # --- Configuration et Paramètres de l'Application ---
 
 st.set_page_config(
-    page_title="Tuteur IA Mathématiques (Système Marocain)",
+    page_title="Tuteur IA Mathématiques (Système Marocاني)",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -121,15 +121,32 @@ def update_user_data(email, data: dict, use_service_key=False):
 # --- Fonctions Auxiliaires (Helper Functions) ---
 
 def get_image_part(uploaded_file):
+    """
+    Crée la partie 'inlineData' pour l'API Gemini.
+    Ajoutنا تحققاً إضافياً لضمان أن mimeType صحيح، مما يقلل من أخطاء 400.
+    """
     if uploaded_file is not None:
         bytes_data = uploaded_file.getvalue()
         mime_type = uploaded_file.type
+        
+        # التحقق من أن تنسيق MIME مدعوم
+        if mime_type not in ["image/png", "image/jpeg", "image/jpg"]:
+            # محاولة تخمين التنسيق الافتراضي في حالة عدم وضوحه
+            # Streamlit يوفر mime_type موثوق به، لذا هذا التحقق إضافي للسلامة
+            if uploaded_file.name.lower().endswith('.png'):
+                mime_type = "image/png"
+            elif uploaded_file.name.lower().endswith(('.jpg', '.jpeg')):
+                mime_type = "image/jpeg"
+            else:
+                st.warning("تنسيق صورة غير مدعوم. نرجو استخدام JPG أو PNG.")
+                return None
+                
         base64_encoded_data = base64.b64encode(bytes_data).decode('utf-8')
         
         return {
             "inlineData": {
                 "data": base64_encoded_data,
-                "mimeType": mime_type
+                "mimeType": mime_type # استخدام النوع الذي تم التحقق منه
             }
         }
     return None
@@ -187,7 +204,7 @@ def call_gemini_api(prompt, image_part=None):
     else:
         style_instruction = "Fournis **une explication conceptuelle approfondie** du problème ou du sujet, et concentre-toi sur les théories et les concepts impliqués."
         
-    lang_instruction = "Tu dois répondre exclusivement en français." if lang == 'fr' else "Tu dois répondre exclusivement en français, en utilisant les termes mathématiques usuels."
+    lang_instruction = "Tu dois répondre exclusivement en français." if lang == 'fr' else "Tu dois répondre exclusivement en français، en utilisant les termes mathématiques usuels."
 
     final_system_prompt = f"{system_prompt_base} {lang_instruction} {style_instruction} Utilise le format Markdown pour organiser ta réponse, et assure-toi que les formules mathématiques sont formatées en LaTeX."
 
@@ -242,11 +259,11 @@ def call_gemini_api(prompt, image_part=None):
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
                 continue
-            return f"Échec de la connexion après {max_retries} tentatives: {e}", []
+            return f"Échec de la connexion بعد {max_retries} محاولات: {e}", []
         except Exception as e:
-            return f"Erreur inattendue: {e}", []
+            return f"خطأ غير متوقع: {e}", []
     
-    return "Échec de la génération de la réponse.", []
+    return "فشل توليد الإجابة.", []
 
 # --- Fonctions d'Authentification ---
 
@@ -399,7 +416,7 @@ def auth_ui():
 
 def main_app_ui():
     
-    st.title("💡 Tuteur Mathématique Spécialisé (Système Marocain)")
+    st.title("💡 Tuteur Mathématique Spécialisé (Système المغربي)")
     st.markdown("---")
 
     st.markdown("""
@@ -407,7 +424,7 @@ def main_app_ui():
     """)
 
     uploaded_file = st.file_uploader(
-        "Optionnel : Téléchargez une photo d'un exercice de mathématiques (JPG ou PNG).",
+        "Optionnel : Téléchargez une photo d'un exercice de mathématiques (JPG أو PNG). الحد الأقصى 4 ميجابايت.",
         type=["png", "jpg", "jpeg"],
         key="image_uploader"
     )
@@ -432,6 +449,8 @@ def main_app_ui():
         else:
             if uploaded_file and uploaded_file.size > 4 * 1024 * 1024:
                 st.error("L'image est trop volumineuse. Veuillez télécharger un fichier de moins de 4 Mo.")
+            elif uploaded_file and image_part_to_send is None:
+                st.error("تعذّر معالجة الصورة. تأكد من أن التنسيق هو JPG أو PNG.")
             else:
                 
                 with st.spinner('L\'IA analyse et prépare la réponse...'):
@@ -504,3 +523,5 @@ else:
 if st.session_state.should_rerun:
     st.session_state.should_rerun = False
     st.experimental_rerun()
+
+
