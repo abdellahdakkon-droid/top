@@ -189,13 +189,14 @@ def call_gemini_api(prompt, image_part=None):
     # Construction des instructions pour le modèle
     lang = user_data.get('lang', 'fr')
     response_type = user_data.get('response_type', 'steps')
-    school_level = user_data.get('school_level', 'Tronc Commun') # نستخدم القيمة الأصلية هنا
+    school_level_raw = user_data.get('school_level', 'Tronc Commun')
     
-    # NOUVEAU FIX: إزالة المشاكل في التنسيق من school_level لتجنب أخطاء 400
-    # لم يعد ضروريا إزالة الأقواس يدويا، سنقوم بتحسين بناء السلسلة النصية
+    # FIX ULTIME (الإصلاح النهائي): Assurer que school_level ne contient AUCUN caractère non-ASCII critique ou parenthèse.
+    # On remplace 'è' par 'e' et on supprime toutes les parenthèses.
+    school_level_safe = school_level_raw.replace('(', '').replace(')', '').replace('è', 'e').replace('é', 'e').replace('É', 'E').replace('à', 'a').replace('À', 'A')
     
-    # سنقوم بتضمين school_level داخل قوسين لضمان تنسيق جيد
-    system_prompt_base = f"Tu es un tuteur spécialisé en mathématiques, expert du système éducatif marocain (niveau {school_level}). Ta mission est de fournir une assistance précise et didactique. Si une image est fournie, tu dois l'analyser et résoudre le problème."
+    # استخدام النص النظيف لـ API لتجنب خطأ 400
+    system_prompt_base = f"Tu es un tuteur spécialisé en mathématiques, expert du système éducatif marocain (niveau {school_level_safe}). Ta mission est de fournir une assistance précise et didactique. Si une image est fournie, tu dois l'analyser et résoudre le problème."
 
     if response_type == 'answer':
         style_instruction = "Fournis uniquement la réponse finale et concise du problème, sans aucune explication détaillée ni étapes intermédiaires."
@@ -216,20 +217,12 @@ def call_gemini_api(prompt, image_part=None):
     if not contents_parts:
         return "Veuillez fournir une question ou une image.", []
 
-    # FIX CRITIQUE: تضمين final_system_prompt كقيمة نصية (text) داخل قائمة parts
-    # بدلاً من استخدام حقل systemInstruction مباشرة، والذي يسبب مشاكل في الترميز
-    
-    # الطريقة الصحيحة في الإصدارات الجديدة من API هي وضعها في الحقل المخصص
-    # لكن بما أننا نواجه مشكلة في ترميز الحروف الخاصة، سنجرب الترميز التلقائي
-    
     payload = {
         "contents": [{"parts": contents_parts}],
         "tools": [{"google_search": {} }],
-        "systemInstruction": final_system_prompt, # نستخدم الحقل المخصص
+        "systemInstruction": final_system_prompt,
     }
 
-    # نترك رؤوس HTTP (Headers) عادية لكي يقوم requests.post بترميز JSON بشكل صحيح
-    # وخاصةً في ما يخص الترميز (Encoding) مثل حرف 'è'
     headers = { 'Content-Type': 'application/json' } 
     
     # نستخدم json.dumps مع ensure_ascii=False لتمكين ترميز UTF-8 بشكل صريح
@@ -281,7 +274,9 @@ def call_gemini_api(prompt, image_part=None):
                 time.sleep(2 ** attempt)
                 continue
             
-            # Retourner l'erreur détaillée بعد آخر محاولة
+            # Retourner l'خطأ بعد آخر محاولة
+            # يتم إرجاع رسالة الخطأ النهائية التي تحتوي على 'system_instruction' الأصلية (التي تم رفضها)
+            # ولكن في هذا الجزء من الكود، هدفنا هو العودة برسالة خطأ واضحة
             return f"Échec final de la connexion (Code {response.status_code}). Veuillez vérifier la validité de votre clé API dans `secrets.toml` أو le format de l'image si elle a été téléchargلة. Détails du serveur: {error_details}", []
 
         except requests.exceptions.RequestException as e:
@@ -556,3 +551,4 @@ else:
 if st.session_state.should_rerun:
     st.session_state.should_rerun = False
     st.rerun()
+
