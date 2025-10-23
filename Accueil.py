@@ -168,9 +168,9 @@ def stream_text_simulation(text):
         yield chunk + " "
         time.sleep(0.02)
 
-# 🌟 دالة call_gemini_api المُحدَّثة لاستخدام SDK 🌟
+# 🌟 دالة call_gemini_api المُحدَّثة لاستخدام SDK 🌟
 def call_gemini_api(prompt: str, uploaded_file=None):
-    """Appelle l'API Gemini en utilisant le SDK لحل مشكلة 400."""
+    """Appelle l'API Gemini en utilisant le SDK لحل مشكلة 400 وخطأ grounding_attributions."""
     
     email = st.session_state.user_email
     user_data = st.session_state.user_data
@@ -232,9 +232,14 @@ def call_gemini_api(prompt: str, uploaded_file=None):
         generated_text = response.text
         
         sources = []
-        if response.candidates and response.candidates[0].grounding_metadata:
+        # 🌟 التعديل المطلوب: إضافة التحقق من وجود 'grounding_attributions' باستخدام hasattr 🌟
+        if (response.candidates and 
+            response.candidates[0].grounding_metadata and 
+            hasattr(response.candidates[0].grounding_metadata, 'grounding_attributions')):
+
             for attribution in response.candidates[0].grounding_metadata.grounding_attributions:
-                if attribution.web and attribution.web.title:
+                # التحقق الإضافي من وجود خاصية الويب بشكل صحيح
+                if hasattr(attribution, 'web') and attribution.web and attribution.web.title:
                     sources.append({
                         'uri': attribution.web.uri,
                         'title': attribution.web.title
@@ -344,7 +349,7 @@ def handle_register():
     
     try:
         users_table.insert([new_user_data]).execute()
-        st.success("Inscription et connexion réussies! 🥳")
+        st.success("Inscription et connexion réussيت! 🥳")
         load_user_session(email, save_cookie=True)
     except Exception as e:
         st.error(f"Échec de l'inscription: {e}. (Vérifiez les règles RLS de Supabase.)")
