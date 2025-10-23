@@ -191,7 +191,9 @@ def call_gemini_api(prompt, image_part=None):
     response_type = user_data.get('response_type', 'steps')
     school_level = user_data.get('school_level', 'Tronc Commun')
     
-    system_prompt_base = f"Tu es un tuteur spécialisé en mathématiques, expert du système éducatif marocain (niveau '{school_level}'). Ta mission est de fournir une assistance précise et didactique. Si une image est fournie, tu dois l'analyser et résoudre le problème."
+    # MODIFICATION CRITIQUE: Suppression des guillemets simples autour de {school_level}
+    # pour éviter un conflit de JSON/String dans le payload API, ce qui causait le Code 400.
+    system_prompt_base = f"Tu es un tuteur spécialisé en mathématiques, expert du système éducatif marocain (niveau {school_level}). Ta mission est de fournir une assistance précise et didactique. Si une image est fournie, tu dois l'analyser et résoudre le problème."
 
     # FIX: Suppression du formatage Markdown (**) des instructions du style 
     # car cela provoque l'erreur "Invalid value at 'system_instruction'".
@@ -268,7 +270,7 @@ def call_gemini_api(prompt, image_part=None):
                 continue
             
             # Retourner l'erreur détaillée après la dernière tentative
-            return f"Échec final de la connexion (Code {response.status_code}). Veuillez vérifier la validité de votre clé API dans `secrets.toml` أو le format de l'image si elle a été téléchargée.", []
+            return f"Échec final de la connexion (Code {response.status_code}). Veuillez vérifier la validité de votre clé API dans `secrets.toml` أو le format de l'image si elle a été téléchargلة.", []
 
         except requests.exceptions.RequestException as e:
             # Traiter les erreurs de réseau (DNS, timeout, etc.)
@@ -325,7 +327,7 @@ def handle_login():
         # استخدام st.success قبل load_user_session
         st.success("Connexion réussie! Bienvenue.")
         load_user_session(email, save_cookie=True)
-        # لا نستخدم st.experimental_rerun() هنا لتجنب الخطأ
+        # لا نستخدم st.rerun() هنا لتجنب الخطأ
     else:
         st.error("E-mail أو mot de passe incorrect.")
 
@@ -386,7 +388,7 @@ def handle_register():
         users_table.insert([new_user_data]).execute()
         st.success("Inscription et connexion réussies! 🥳")
         load_user_session(email, save_cookie=True)
-        # لا نستخدم st.experimental_rerun() هنا لتجنب الخطأ
+        # لا نستخدم st.rerun() هنا لتجنب الخطأ
     except Exception as e:
         st.error(f"Échec de l'inscription: {e}. (Vérifiez les règles RLS de Supabase.)")
 
@@ -541,4 +543,4 @@ else:
 # هذا يضمن إعادة تحميل واحدة فقط، مع تجنب الخطأ السابق
 if st.session_state.should_rerun:
     st.session_state.should_rerun = False
-    st.experimental_rerun()
+    st.rerun()
