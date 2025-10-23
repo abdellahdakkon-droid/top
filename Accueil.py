@@ -7,7 +7,7 @@ import json
 import os
 import time
 import base64
-import bcrypt 
+import bcrypt
 from PIL import Image
 from io import BytesIO
 from datetime import date
@@ -515,3 +515,4 @@ else:
 if st.session_state.should_rerun:
     st.session_state.should_rerun = False
     st.rerun() # Redémarrage pour mettre à jour la session
+
