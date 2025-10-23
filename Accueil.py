@@ -193,15 +193,18 @@ def call_gemini_api(prompt, image_part=None):
     
     system_prompt_base = f"Tu es un tuteur spécialisé en mathématiques, expert du système éducatif marocain (niveau '{school_level}'). Ta mission est de fournir une assistance précise et didactique. Si une image est fournie, tu dois l'analyser et résoudre le problème."
 
+    # FIX: Suppression du formatage Markdown (**) des instructions du style 
+    # car cela provoque l'erreur "Invalid value at 'system_instruction'".
     if response_type == 'answer':
-        style_instruction = "Fournis **uniquement la réponse finale** et concise du problème, sans aucune explication détaillée ni étapes intermédiaires."
+        style_instruction = "Fournis uniquement la réponse finale et concise du problème, sans aucune explication détaillée ni étapes intermédiaires."
     elif response_type == 'steps':
-        style_instruction = "Fournis **les étapes détaillées de résolution** de manière structurée et méthodique pour aider l'étudiant à suivre le raisonnement."
+        style_instruction = "Fournis les étapes détaillées de résolution de manière structurée et méthodique pour aider l'étudiant à suivre le raisonnement."
     else:
-        style_instruction = "Fournis **une explication conceptuelle approfondie** du problème ou du sujet, et concentre-toi sur les théories et les concepts impliqués."
+        style_instruction = "Fournis une explication conceptuelle approfondie du problème ou du sujet, et concentre-toi sur les théories et les concepts impliqués."
         
     lang_instruction = "Tu dois répondre exclusivement en français." if lang == 'fr' else "Tu dois répondre exclusivement en français، en utilisant les termes mathématiques usuels."
 
+    # L'instruction finale demande toujours au modèle d'utiliser Markdown pour la SORTIE.
     final_system_prompt = f"{system_prompt_base} {lang_instruction} {style_instruction} Utilise le format Markdown pour organiser ta réponse, et assure-toi que les formules mathématiques sont formatées en LaTeX."
 
     contents_parts = []
