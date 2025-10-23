@@ -70,7 +70,7 @@ if 'response_type' not in st.session_state: st.session_state.response_type = 'st
 if 'school_level' not in st.session_state: st.session_state.school_level = 'Tronc Commun'
 if 'requests_today' not in st.session_state: st.session_state.requests_today = 0
 if 'is_unlimited' not in st.session_state: st.session_state.is_unlimited = False
-
+if 'should_rerun' not in st.session_state: st.session_state.should_rerun = False # مفتاح جديد لإعادة التحميل
 
 # --- Fonctions Supabase Partagées ---
 
@@ -250,10 +250,6 @@ def call_gemini_api(prompt, image_part=None):
 
 # --- Fonctions d'Authentification ---
 
-# *********************************************************
-# دالة handle_logout تم حذفها بناءً على طلب المستخدم بعد إزالة زرها.
-# *********************************************************
-
 def load_user_session(email, save_cookie=False):
     user_data = get_user_by_email(email)
     
@@ -279,6 +275,7 @@ def load_user_session(email, save_cookie=False):
             st.session_state.requests_today = user_data.get('requests_today', 0)
             
         st.session_state.auth_status = 'logged_in'
+        st.session_state.should_rerun = True # إعلام التطبيق بضرورة إعادة التحميل
         return True
     return False
 
@@ -291,14 +288,15 @@ def handle_login():
     user_data = get_user_by_email(email)
     
     if user_data and check_password(password, user_data.get('password_hash', '')):
+        # استخدام st.success قبل load_user_session
         st.success("Connexion réussie! Bienvenue.")
         load_user_session(email, save_cookie=True)
-        st.experimental_rerun()
+        # لا نستخدم st.experimental_rerun() هنا لتجنب الخطأ
     else:
         st.error("E-mail أو mot de passe incorrect.")
 
 def handle_register():
-    """Traite l'inscription, vérifie le code de parrainage et accorde la récompense."""
+    """Traite l'inscription، vérifie le code de parrainage et accorde la récompense."""
     email = st.session_state.reg_email.lower()
     password = st.session_state.reg_password
     confirm_password = st.session_state.reg_password_confirm
@@ -320,7 +318,7 @@ def handle_register():
     
     if REFERRAL_PARAM in query_params:
         potential_referrer_email = query_params[REFERRAL_PARAM]
-        # Dans Streamlit, les query params peuvent être des listes. On prend le premier élément.
+        # Dans Streamlit، les query params peuvent être des listes. On prend le premier élément.
         if isinstance(potential_referrer_email, list):
             potential_referrer_email = potential_referrer_email[0]  
             
@@ -354,7 +352,7 @@ def handle_register():
         users_table.insert([new_user_data]).execute()
         st.success("Inscription et connexion réussies! 🥳")
         load_user_session(email, save_cookie=True)
-        st.experimental_rerun()
+        # لا نستخدم st.experimental_rerun() هنا لتجنب الخطأ
     except Exception as e:
         st.error(f"Échec de l'inscription: {e}. (Vérifiez les règles RLS de Supabase.)")
 
@@ -371,6 +369,7 @@ def auth_ui():
             st.subheader("Se Connecter")
             st.text_input("E-mail", key="login_email")
             st.text_input("Mot de passe", type="password", key="login_password")
+            # عند النقر على زر تسجيل الدخول، يتم استدعاء الدالة handle_login
             st.form_submit_button("Connexion", type="primary", on_click=handle_login)
 
     with col2:
@@ -380,7 +379,7 @@ def auth_ui():
             st.text_input("Mot de passe", type="password", key="reg_password")
             st.text_input("Confirmer le mot de passe", type="password", key="reg_password_confirm")
             
-            # --- تم إزالة جميع خيارات التفضيلات هنا ---
+            # --- خيارات التفضيلات الافتراضية ---
             st.subheader("Vos Préférences par Défaut")
             st.caption("Votre compte سيكون مكوّناً بشكل افتراضي على: **الفرنسية** (الإجابة عبر **الخطوات التفصيلية**، والمستوى الدراسي **الجذع المشترك**).")
 
@@ -392,6 +391,7 @@ def auth_ui():
                 if isinstance(ref_email, list): ref_email = ref_email[0]
                 st.info(f"Vous vous inscrivez via le lien de parrainage ({ref_email}). Votre parrain recevra un bonus!")
 
+            # عند النقر على زر التسجيل، يتم استدعاء الدالة handle_register
             st.form_submit_button("S'inscrire", type="secondary", on_click=handle_register)
 
 
@@ -461,9 +461,9 @@ def main_app_ui():
                     st.markdown(generated_text)
 
 
-# --- Contrôle du Flux Principal ---
+# --- Contrôle du Flux الرئيسي وإعادة التحميل ---
 
-# 1. Vérification du cookie au démarrage
+# 1. تحقق من الكوكي عند بدء التشغيل
 if st.session_state.auth_status == 'logged_out':
     remembered_email = cookies.get(COOKIE_KEY_EMAIL)
     if remembered_email:
@@ -471,14 +471,14 @@ if st.session_state.auth_status == 'logged_out':
             st.toast(f"Bienvenue، {remembered_email.split('@')[0]}! Connexion automatique.")
             st.rerun()
             
-# 2. Affichage de l'interface appropriée
+# 2. عرض الواجهة المناسبة
 if st.session_state.auth_status == 'logged_out':
     auth_ui()
 else:
-    # Si l'utilisateur est connecté، affiche l'UI principale
+    # إذا كان المستخدم مسجلاً دخوله، اعرض الواجهة الرئيسية
     main_app_ui()
 
-    # Barre latérale pour le statut
+    # الشريط الجانبي للحالة
     st.sidebar.header(f"Statut de l'Utilisateur")
     st.sidebar.markdown(f"**E-mail:** `{st.session_state.user_email}`")
     
@@ -499,4 +499,8 @@ else:
     
     st.sidebar.markdown("---")
 
-
+# 3. معالجة إعادة التحميل التلقائي بعد تسجيل الدخول/التسجيل بنجاح
+# هذا يضمن إعادة تحميل واحدة فقط، مع تجنب الخطأ السابق
+if st.session_state.should_rerun:
+    st.session_state.should_rerun = False
+    st.experimental_rerun()
