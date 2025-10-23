@@ -265,7 +265,7 @@ def handle_logout():
         del cookies[COOKIE_KEY_EMAIL]
     cookies.save()
     
-    st.info("تم تسجيل الخروج بنجاح. يتم تحديث الصفحة...")
+    # تم إزالة st.info() لتجنب تضارب العرض مع st.experimental_rerun()
     st.experimental_rerun()
 
 
@@ -439,7 +439,7 @@ def main_app_ui():
             st.error(f"Erreur lors du chargement de l'image : {e}")
 
     user_prompt = st.text_area(
-        "Ajoutez votre question ou votre instruction ici (même si vous avez téléchargé une image).",
+        "Ajoutez votre question ou votre instruction ici (même si vous avez téléchargت une image).",
         height=100,
         key="prompt_input"
     )
