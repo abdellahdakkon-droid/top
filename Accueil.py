@@ -260,12 +260,13 @@ def handle_logout():
         del st.session_state['user_data']
     
     # 2. مسح الكوكيز
-    # **التصحيح هنا**: استخدام الطريقة الصحيحة لمكتبة EncryptedCookieManager
-    cookies[COOKIE_KEY_EMAIL] = None  # تعيين قيمة الكوكي على None لحذفه
+    # التصحيح الآن: استخدام 'del' لإزالة المفتاح بدلاً من تعيينه لـ None لتجنب مشكلة .encode()
+    if COOKIE_KEY_EMAIL in cookies:
+        del cookies[COOKIE_KEY_EMAIL]
     cookies.save()
     
     st.info("تم تسجيل الخروج بنجاح. يتم تحديث الصفحة...")
-    st.experimental_rerun() # لإعادة تحميل التطبيق وإظهار شاشة الدخول
+    st.experimental_rerun()
 
 
 def load_user_session(email, save_cookie=False):
@@ -516,5 +517,6 @@ else:
     
     st.sidebar.markdown("---")
     st.sidebar.button("Déconnexion", on_click=handle_logout, use_container_width=True)
+
 
 
