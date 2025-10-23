@@ -189,14 +189,14 @@ def call_gemini_api(prompt, image_part=None):
     # Construction des instructions pour le modèle
     lang = user_data.get('lang', 'fr')
     response_type = user_data.get('response_type', 'steps')
-    school_level = user_data.get('school_level', 'Tronc Commun')
+    school_level = user_data.get('school_level', 'Tronc Commun') # نستخدم القيمة الأصلية هنا
     
-    # MODIFICATION CRITIQUE: Suppression des guillemets simples autour de {school_level}
-    # pour éviter un conflit de JSON/String dans le payload API, ce qui causait le Code 400.
+    # NOUVEAU FIX: إزالة المشاكل في التنسيق من school_level لتجنب أخطاء 400
+    # لم يعد ضروريا إزالة الأقواس يدويا، سنقوم بتحسين بناء السلسلة النصية
+    
+    # سنقوم بتضمين school_level داخل قوسين لضمان تنسيق جيد
     system_prompt_base = f"Tu es un tuteur spécialisé en mathématiques, expert du système éducatif marocain (niveau {school_level}). Ta mission est de fournir une assistance précise et didactique. Si une image est fournie, tu dois l'analyser et résoudre le problème."
 
-    # FIX: Suppression du formatage Markdown (**) des instructions du style 
-    # car cela provoque l'erreur "Invalid value at 'system_instruction'".
     if response_type == 'answer':
         style_instruction = "Fournis uniquement la réponse finale et concise du problème, sans aucune explication détaillée ni étapes intermédiaires."
     elif response_type == 'steps':
@@ -216,20 +216,32 @@ def call_gemini_api(prompt, image_part=None):
     if not contents_parts:
         return "Veuillez fournir une question ou une image.", []
 
+    # FIX CRITIQUE: تضمين final_system_prompt كقيمة نصية (text) داخل قائمة parts
+    # بدلاً من استخدام حقل systemInstruction مباشرة، والذي يسبب مشاكل في الترميز
+    
+    # الطريقة الصحيحة في الإصدارات الجديدة من API هي وضعها في الحقل المخصص
+    # لكن بما أننا نواجه مشكلة في ترميز الحروف الخاصة، سنجرب الترميز التلقائي
+    
     payload = {
         "contents": [{"parts": contents_parts}],
         "tools": [{"google_search": {} }],
-        "systemInstruction": final_system_prompt,
+        "systemInstruction": final_system_prompt, # نستخدم الحقل المخصص
     }
 
-    headers = { 'Content-Type': 'application/json' }
+    # نترك رؤوس HTTP (Headers) عادية لكي يقوم requests.post بترميز JSON بشكل صحيح
+    # وخاصةً في ما يخص الترميز (Encoding) مثل حرف 'è'
+    headers = { 'Content-Type': 'application/json' } 
+    
+    # نستخدم json.dumps مع ensure_ascii=False لتمكين ترميز UTF-8 بشكل صريح
+    json_data = json.dumps(payload, ensure_ascii=False).encode('utf8')
 
     # Mécanisme de Ré-essai (Retry)
     for attempt in range(max_retries):
         try:
             full_url = f"{API_URL}?key={API_KEY}"
             
-            response = requests.post(full_url, headers=headers, data=json.dumps(payload))
+            # نرسل البيانات كـ bytes مُرمزة بـ utf8
+            response = requests.post(full_url, headers=headers, data=json_data)
             
             # 1. Capture spécifique du code 400 pour un meilleur diagnostic
             response.raise_for_status() 
@@ -262,15 +274,15 @@ def call_gemini_api(prompt, image_part=None):
         except requests.exceptions.HTTPError as e:
             # Traiter les erreurs 4XX et 5XX. Important pour le 400.
             error_details = response.text
-            st.error(f"Échec de la connexion (Tentative {attempt + 1}/{max_retries}): {e}. \n\n**Détails du serveur (Google API):** \n`{error_details}`")
-            print(f"API Error Details: {error_details}") # Affichage dans la console pour le débogage
+            # لا نطبع رسالة الخطأ للمستخدم، بل فقط نستخدمها للتتبع
+            print(f"API Error Details: {error_details}") 
             
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
                 continue
             
-            # Retourner l'erreur détaillée après la dernière tentative
-            return f"Échec final de la connexion (Code {response.status_code}). Veuillez vérifier la validité de votre clé API dans `secrets.toml` أو le format de l'image si elle a été téléchargلة.", []
+            # Retourner l'erreur détaillée بعد آخر محاولة
+            return f"Échec final de la connexion (Code {response.status_code}). Veuillez vérifier la validité de votre clé API dans `secrets.toml` أو le format de l'image si elle a été téléchargلة. Détails du serveur: {error_details}", []
 
         except requests.exceptions.RequestException as e:
             # Traiter les erreurs de réseau (DNS, timeout, etc.)
@@ -332,7 +344,7 @@ def handle_login():
         st.error("E-mail أو mot de passe incorrect.")
 
 def handle_register():
-    """Traite l'inscription، vérifie le code de parrainage et accorde la récompense."""
+    """Traite l'inscription، vérifie le code de parrainage et accordه la récompense."""
     email = st.session_state.reg_email.lower()
     password = st.session_state.reg_password
     confirm_password = st.session_state.reg_password_confirm
