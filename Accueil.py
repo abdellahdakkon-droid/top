@@ -122,8 +122,8 @@ def update_user_data(email, data: dict, use_service_key=False):
 
 def get_image_part(uploaded_file):
     """
-    Crée la partie 'inlineData' pour l'API Gemini.
-    Ajoutنا تحققاً إضافياً لضمان أن mimeType صحيح، مما يقلل من أخطاء 400.
+    Crée la partie 'inlineData' لـ API Gemini.
+    يحتوي على تحقق للتأكد من أن mimeType صحيح.
     """
     if uploaded_file is not None:
         bytes_data = uploaded_file.getvalue()
@@ -131,8 +131,7 @@ def get_image_part(uploaded_file):
         
         # التحقق من أن تنسيق MIME مدعوم
         if mime_type not in ["image/png", "image/jpeg", "image/jpg"]:
-            # محاولة تخمين التنسيق الافتراضي في حالة عدم وضوحه
-            # Streamlit يوفر mime_type موثوق به، لذا هذا التحقق إضافي للسلامة
+            # محاولة تخمين التنسيق الافتراضي
             if uploaded_file.name.lower().endswith('.png'):
                 mime_type = "image/png"
             elif uploaded_file.name.lower().endswith(('.jpg', '.jpeg')):
@@ -146,7 +145,7 @@ def get_image_part(uploaded_file):
         return {
             "inlineData": {
                 "data": base64_encoded_data,
-                "mimeType": mime_type # استخدام النوع الذي تم التحقق منه
+                "mimeType": mime_type 
             }
         }
     return None
@@ -169,12 +168,10 @@ def call_gemini_api(prompt, image_part=None):
     current_date_str = str(date.today())
     
     # 1. Application de la Limite de Requêtes
-    # Calculer la limite totale: BASE + BONUS (si disponible)
     max_total_requests = MAX_REQUESTS + user_data.get('bonus_questions', 0)
     
     if not user_data.get('is_unlimited', False):
         
-        # Mise à jour du compteur pour un nouveau jour
         if user_data.get('last_request_date') != current_date_str:
             st.session_state.requests_today = 0
             user_data['requests_today'] = 0
@@ -190,7 +187,6 @@ def call_gemini_api(prompt, image_part=None):
         st.session_state.requests_today = current_count + 1
 
     # Construction des instructions pour le modèle
-    # Utilisation des préférences stockées dans Supabase (ou les valeurs par défaut)
     lang = user_data.get('lang', 'fr')
     response_type = user_data.get('response_type', 'steps')
     school_level = user_data.get('school_level', 'Tronc Commun')
@@ -229,8 +225,11 @@ def call_gemini_api(prompt, image_part=None):
             full_url = f"{API_URL}?key={API_KEY}"
             
             response = requests.post(full_url, headers=headers, data=json.dumps(payload))
-            response.raise_for_status()
             
+            # 1. Capture spécifique du code 400 pour un meilleur diagnostic
+            response.raise_for_status() 
+            
+            # Si le code arrive ici، la requête a réussi (code 200)
             result = response.json()
             
             # Mise à jour du compteur dans Supabase
@@ -255,11 +254,26 @@ def call_gemini_api(prompt, image_part=None):
             else:
                 return "Désolé, le modèle n'a pas pu fournir de réponse. Veuillez réessayer avec une autre requête.", []
 
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.HTTPError as e:
+            # Traiter les erreurs 4XX et 5XX. Important pour le 400.
+            error_details = response.text
+            st.error(f"Échec de la connexion (Tentative {attempt + 1}/{max_retries}): {e}. \n\n**Détails du serveur (Google API):** \n`{error_details}`")
+            print(f"API Error Details: {error_details}") # Affichage dans la console pour le débogage
+            
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
                 continue
-            return f"Échec de la connexion بعد {max_retries} محاولات: {e}", []
+            
+            # Retourner l'erreur détaillée après la dernière tentative
+            return f"Échec final de la connexion (Code {response.status_code}). Veuillez vérifier la validité de votre clé API dans `secrets.toml` أو le format de l'image si elle a été téléchargée.", []
+
+        except requests.exceptions.RequestException as e:
+            # Traiter les erreurs de réseau (DNS, timeout, etc.)
+            st.error(f"Erreur réseau (Tentative {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            return f"Échec de la connexion après {max_retries} tentatives: {e}.", []
         except Exception as e:
             return f"خطأ غير متوقع: {e}", []
     
@@ -454,6 +468,7 @@ def main_app_ui():
             else:
                 
                 with st.spinner('L\'IA analyse et prépare la réponse...'):
+                    # نمرر image_part_to_send، حتى لو كان None (في حال عدم وجود صورة)
                     generated_text, sources = call_gemini_api(user_prompt, image_part_to_send)
                 
                 st.subheader("✅ Réponse Générée :")
@@ -477,6 +492,7 @@ def main_app_ui():
                         st.caption("Aucune source de recherche externe n'a été utilisée pour cette réponse.")
 
                 else:
+                    # يتم عرض خطأ API التفصيلي هنا
                     st.markdown(generated_text)
 
 
@@ -523,5 +539,3 @@ else:
 if st.session_state.should_rerun:
     st.session_state.should_rerun = False
     st.experimental_rerun()
-
-
