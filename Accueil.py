@@ -256,7 +256,7 @@ def call_gemini_api(prompt: str, uploaded_file=None):
         st.error(f"خطأ غير متوقع: {e}")
         return f"خطأ غير متوقع: {e}", []
 
-# --- V. Fonctions d'Authentification et de Session (لا تغيير) ---
+# --- V. Fonctions d'Authentification et de Session (التعديل هنا) ---
 
 def load_user_session(email, save_cookie=False):
     """Charge les données utilisateur et met à jour la session."""
@@ -269,6 +269,13 @@ def load_user_session(email, save_cookie=False):
             
         st.session_state.user_email = email
         st.session_state.user_data = user_data
+        
+        # 🛠️ التعديل لحل مشكلة AttributeError في صفحات الإعدادات (مثل 1_Parametres.py) 🛠️
+        # يتم نسخ مفاتيح الإعدادات الأساسية مباشرة إلى st.session_state
+        st.session_state.school_level = user_data.get('school_level', 'Classes Préparatoires')
+        st.session_state.response_type = user_data.get('response_type', 'steps')
+        st.session_state.lang = user_data.get('lang', 'fr')
+        # ---------------------------------------------------------------------------------
         
         # Chargement des préférences utilisateur
         st.session_state.is_unlimited = user_data.get('is_unlimited', False)
@@ -454,7 +461,9 @@ def main_app_ui():
     requests_left = max_total_requests - st.session_state.requests_today
 
     st.sidebar.header(f"Statut : {st.session_state.user_email}")
-    st.sidebar.markdown(f"**Niveau Actuel:** {st.session_state.user_data.get('school_level', 'Non Défini')}")
+    # تم تغيير st.session_state.user_data.get('school_level', 'Non Défini') إلى st.session_state.school_level
+    # وذلك بعد تهيئته مباشرة في دالة load_user_session
+    st.sidebar.markdown(f"**Niveau Actuel:** {st.session_state.school_level}")
     st.sidebar.markdown(f"**Bonus Affiliation:** {st.session_state.user_data.get('bonus_questions', 0)} questions")
 
     if st.session_state.is_unlimited:
