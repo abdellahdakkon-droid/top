@@ -3,14 +3,9 @@
 import streamlit as st
 from urllib.parse import urlencode, urlunparse, urlparse, parse_qs
 from supabase import create_client, Client 
+import uuid # 🚨 جديد: لإضافة وظيفة توليد UID إذا لم يكن موجوداً
 
-# 🚨 التعديل الضروري 🚨: رابط التطبيق الحقيقي مع تحديد مسار الصفحة
-# إذا كانت صفحة الاستقبال لديك هي الصفحة الرئيسية (index.py)، فاستخدم:
-# APP_LIVE_URL = "https://topmath.streamlit.app" 
-#
-# إذا كانت صفحة الاستقبال (التي بها التسجيل/الدخول) اسمها Accueil.py (أو أي اسم آخر)، يجب أن تحدد المسار.
-# سنفترض أن صفحة الهبوط هي الصفحة الرئيسية (الافتراضية).
-# إذا لم يعمل هذا، قم بتبديله إلى الخيار الثاني (مثلاً: "https://topmath.streamlit.app/Accueil")
+# 🚨 التعديل الضروري 🚨: رابط التطبيق الحقيقي
 APP_LIVE_URL = "https://topmath.streamlit.app" 
 
 
@@ -35,16 +30,15 @@ except Exception as e:
 # --- Fonctions Utilitارية ---
 
 def generate_affiliate_link(affiliate_tag, parameter_name, base_url):
-    """Génère le lien affilié مع كود المستخدم الحالي."""
+    """Génère le lien affilié مع كود المستخدم الحالي (بواسطة UID)."""
     
-    # تأكد من أن الـ base_url يحتوي على المسار الصحيح إذا كان تطبيقك متعدد الصفحات
     base_url_for_reg = base_url 
     
     try:
         parsed_url = urlparse(base_url_for_reg)
         query_params = parse_qs(parsed_url.query)
         
-        # Injecter le code de parrainage (l'e-mail de l'utilisateur)
+        # Injecter le code de parrainage (الآن هو UID قصير)
         query_params[parameter_name] = [affiliate_tag]
         
         new_query = urlencode(query_params, doseq=True)
@@ -63,6 +57,13 @@ if 'auth_status' not in st.session_state or st.session_state.auth_status != 'log
 
 user_email = st.session_state.get('user_email', 'default@example.com')
 user_data = st.session_state.get('user_data', {'bonus_questions': 0})
+
+# 🚨 التعديل الرئيسي لضمان كود إحالة قصير وفعال
+# نحتاج لاستخدام UID (المعرّف) ككود إحالة بدلاً من البريد الإلكتروني
+# يجب عليك التأكد من أن 'uid' موجود في بياناتك. إذا لم يكن، فسنقوم بتوليد كود عشوائي.
+affiliate_tag = user_data.get('uid', str(uuid.uuid4()).split('-')[0]) 
+# إذا كان الـ UID موجوداً، فاستخدمه. إذا لم يكن، فسنولد جزءاً قصيراً من UUID.
+# يفضل استخدام الـ UID من Supabase/Auth لأنه ثابت لكل مستخدم.
 
 st.title("🤝 نظام الإحالة والمكافآت")
 st.markdown("---")
@@ -93,9 +94,7 @@ st.markdown("---")
 
 st.header("أنشئ رابطك الفريد")
 
-affiliate_tag = user_email # البريد الإلكتروني هو كود الإحالة
-
-# توليد الرابط باستخدام الرابط الفعلي
+# توليد الرابط باستخدام الـ UID القصير (أكثر أماناً وفعالية)
 generated_link = generate_affiliate_link(affiliate_tag, REFERRAL_PARAM, APP_LIVE_URL)
 
 st.code(generated_link, language="text")
@@ -112,7 +111,8 @@ st.header("إحصائيات الإحالة")
 # محاولة جلب الإحالات من Supabase
 referrals = []
 try:
-    response = users_table.select("email").eq("referred_by", user_email).execute()
+    # يجب البحث الآن باستخدام كود الإحالة القصير (affiliate_tag)
+    response = users_table.select("email").eq("referred_by", affiliate_tag).execute()
     referrals = response.data
 except Exception as e:
     st.error("تعذر جلب إحصائيات الإحالة. تأكد من أن الاتصال بـ Supabase فعال.")
