@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
-# Tuteur Mathématique IA (Système Éducatif Marocain) - Cleaned & Corrected
+# Tuteur Mathématique IA (Système الإدكيشن Marocain) - Cleaned & Corrected
 
 import streamlit as st
-# ❌ لم نعد بحاجة إلى requests و base64
-# import requests
-# import base64
-import json 
+import json
 import os
 import time
 # 🌟 إضافة مكتبة Gemini SDK
@@ -34,26 +31,41 @@ REFERRAL_PARAM = "ref_code"
 max_retries = 3 # لم نعد نستخدم هذا في SDK، لكنه لا يضر
 COOKIE_KEY_EMAIL = "user_auth_email"
 SUPABASE_TABLE_NAME = "users"
+# 🌟 تعريف بريد الإدارة
+ADMIN_EMAIL = "ahmed.tantawi.10@gmail.com" # استخدم بريدك الإلكتروني هنا
 
 # Configuration des API Keys depuis secrets.toml
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
     SUPABASE_URL: str = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY: str = st.secrets["SUPABASE_KEY"]
-    SERVICE_KEY = st.secrets.get("SUPABASE_SERVICE_KEY") 
+    SERVICE_KEY = st.secrets.get("SUPABASE_SERVICE_KEY")
 except KeyError as e:
     st.error(f"Erreur de configuration: Clé manquante dans secrets.toml: {e}. L'application ne démarrera pas correctement.")
     st.stop()
     
-# ❌ إزالة API_URL لم يعد مطلوباً
-# API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent"
-
-# 🌟 التعديل 1: تهيئة عميل Gemini SDK
+# 🌟 تهيئة عميل Gemini SDK
 try:
     GEMINI_CLIENT = genai.Client(api_key=API_KEY)
 except Exception as e:
     st.error(f"Erreur d'initialisation Gemini SDK: {e}")
     st.stop()
+
+# قائمة المستويات التعليمية المغربية
+MAROC_LEVELS = [
+    'الإعدادي (Collège)',
+    'جذع مشترك (Tronc Commun)',
+    'الأولى بكالوريا (1ère Année Bac)',
+    'الثانية بكالوريا (2ème Année Bac)',
+    'الدروس الخصوصية (Classes Préparatoires)',
+]
+
+# 🌟 الإضافة الجديدة: خيارات أنواع الاستجابة
+RESPONSE_TYPES = {
+    'steps': 'Étapes Détaillées (Didactique)',
+    'concept': 'Explication Conceptuelle (Théorie)',
+    'answer': 'Réponse Finale (Concise)'
+}
 
 
 # --- II. Initialisation des Clients et de l'État (لا تغيير) ---
@@ -61,7 +73,7 @@ except Exception as e:
 # 1. Initialisation des Cookies
 cookies = EncryptedCookieManager(
     prefix="gemini_math_app/",
-    password=st.secrets.get("COOKIE_PASSWORD", "super_secret_default_key"), 
+    password=st.secrets.get("COOKIE_PASSWORD", "super_secret_default_key"),
 )
 if not cookies.ready():
     st.stop()
@@ -81,6 +93,9 @@ if 'user_data' not in st.session_state: st.session_state.user_data = None
 if 'requests_today' not in st.session_state: st.session_state.requests_today = 0
 if 'is_unlimited' not in st.session_state: st.session_state.is_unlimited = False
 if 'should_rerun' not in st.session_state: st.session_state.should_rerun = False
+if 'school_level' not in st.session_state: st.session_state.school_level = MAROC_LEVELS[-1] # القيمة الافتراضية
+if 'response_type' not in st.session_state: st.session_state.response_type = 'steps'
+if 'lang' not in st.session_state: st.session_state.lang = 'fr'
 
 
 # --- III. Fonctions de Base (Supabase & Crypto) (لا تغيير) ---
@@ -92,11 +107,11 @@ def get_supabase_client(use_service_key: bool = False) -> Client:
     return supabase
 
 def hash_password(password: str) -> str:
-    """Hachage sécurisé du mot de passe avec bcrypt."""
+    """Hachage sécurisé du mot المرور بـ bcrypt."""
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def check_password(password: str, hashed_password: str) -> bool:
-    """Vérifie le mot de passe entré."""
+    """Vérifie le mot المرور المدخل."""
     try:
         return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
     except Exception:
@@ -120,8 +135,7 @@ def update_user_data(email, data: dict, use_service_key=False):
         if response.data and st.session_state.user_email == email:
             # Mise à jour de la session si l'utilisateur actuel est modifié
             st.session_state.user_data.update(response.data[0])
-            return True
-        return False
+        return True
     except Exception as e:
         print(f"Erreur de mise à jour Supabase: {e}")
         return False
@@ -129,14 +143,12 @@ def update_user_data(email, data: dict, use_service_key=False):
 
 # --- IV. Logique de l'API Gemini ---
 
-# ❌ حذف دالة get_image_part بالكامل
-
 def build_system_prompt():
     """Construit la System Instruction complète."""
-    user_data = st.session_state.user_data
-    school_level = user_data.get('school_level', 'Tronc Commun')
-    response_type = user_data.get('response_type', 'steps')
-    lang = user_data.get('lang', 'fr')
+    # استخدام القيم من session_state مباشرة (التي تم تحديثها في load_user_session)
+    school_level = st.session_state.school_level
+    response_type = st.session_state.response_type
+    lang = st.session_state.lang
 
     # Base: Spécialisation et niveau
     base_prompt = (
@@ -153,12 +165,12 @@ def build_system_prompt():
         style_instruction = "Fournis les étapes détaillées de résolution de manière structurée et méthodique pour aider l'étudiant à suivre le raisonnement."
 
     # Langue
-    lang_instruction = "Tu dois répondre exclusivement en français." if lang == 'fr' else "Tu dois répondre exclusivement en français، en utilisant les termes mathématiques usuels."
+    lang_instruction = "Tu dois répondre exclusivement en français." if lang == 'fr' else "Tu dois répondre exclusivement en arabe، en utilisant les termes mathématiques المعتادة في المغرب (مع إمكانية كتابة الرموز اللاتينية عند الضرورة)."
 
     # Instruction finale (demander Markdown/LaTeX pour la sortie)
     final_prompt = (
         f"{base_prompt} {lang_instruction} {style_instruction} "
-        "Utilise le format Markdown pour organiser ta réponse، et assure-toi que les formules mathématiques sont formatées en LaTeX."
+        "Utilise le format Markdown pour organiser ta réponse، و تأكد أن المعادلات الرياضية مدمجة بتنسيق LaTeX."
     )
     return final_prompt
 
@@ -191,7 +203,7 @@ def call_gemini_api(prompt: str, uploaded_file=None):
             st.error(f"Limite atteinte: Vous avez atteint le maximum de requêtes ({max_total_requests}) pour aujourd'hui. Revenez demain!")
             return "Limite de requêtes atteinte.", []
             
-        st.session_state.requests_today = current_count + 1 # Incrémenter قبل الاتصال
+        st.session_state.requests_today = current_count + 1 # Incrémentر قبل الاتصال
 
     # 2. بناء الـ Contents والتعليمات المخصصة
     final_system_prompt = build_system_prompt()
@@ -232,7 +244,7 @@ def call_gemini_api(prompt: str, uploaded_file=None):
         generated_text = response.text
         
         sources = []
-        # 🌟 التعديل المطلوب: إضافة التحقق من وجود 'grounding_attributions' باستخدام hasattr 🌟
+        # التحقق من وجود 'grounding_attributions' باستخدام hasattr
         if (response.candidates and 
             response.candidates[0].grounding_metadata and 
             hasattr(response.candidates[0].grounding_metadata, 'grounding_attributions')):
@@ -256,7 +268,7 @@ def call_gemini_api(prompt: str, uploaded_file=None):
         st.error(f"خطأ غير متوقع: {e}")
         return f"خطأ غير متوقع: {e}", []
 
-# --- V. Fonctions d'Authentification et de Session (التعديل هنا) ---
+# --- V. Fonctions d'Authentification et de Session ---
 
 def load_user_session(email, save_cookie=False):
     """Charge les données utilisateur et met à jour la session."""
@@ -270,17 +282,15 @@ def load_user_session(email, save_cookie=False):
         st.session_state.user_email = email
         st.session_state.user_data = user_data
         
-        # 🛠️ التعديل لحل مشكلة AttributeError في صفحات الإعدادات (مثل 1_Parametres.py) 🛠️
-        # يتم نسخ مفاتيح الإعدادات الأساسية مباشرة إلى st.session_state
-        st.session_state.school_level = user_data.get('school_level', 'Classes Préparatoires')
+        # نسخ مفاتيح الإعدادات الأساسية مباشرة إلى st.session_state
+        st.session_state.school_level = user_data.get('school_level', MAROC_LEVELS[-1])
         st.session_state.response_type = user_data.get('response_type', 'steps')
         st.session_state.lang = user_data.get('lang', 'fr')
-        # ---------------------------------------------------------------------------------
         
         # Chargement des préférences utilisateur
         st.session_state.is_unlimited = user_data.get('is_unlimited', False)
         
-        # Gestion du compteur quotidien (pour la vérification immédiate)
+        # Gestion du compteur quotidien (للفحص الفوري)
         current_date_str = str(date.today())
         if user_data.get('last_request_date') != current_date_str:
             st.session_state.requests_today = 0
@@ -310,6 +320,11 @@ def handle_register():
     email = st.session_state.reg_email.lower()
     password = st.session_state.reg_password
     confirm_password = st.session_state.reg_password_confirm
+    # 🌟 استخلاص خيارات التخصيص من النموذج
+    selected_level = st.session_state.reg_level
+    selected_lang = st.session_state.reg_lang
+    # 🌟 الإضافة الجديدة: استخلاص نوع الاستجابة
+    selected_response_type = st.session_state.reg_response_type
     
     if password != confirm_password:
         st.error("Les mots de passe ne correspondent pas.")
@@ -344,9 +359,10 @@ def handle_register():
     new_user_data = {
         'email': email,
         'password_hash': hash_password(password),
-        'lang': 'fr',
-        'response_type': 'steps',
-        'school_level': 'Classes Préparatoires', 
+        # 🌟 استخدام الخيارات المختارة
+        'lang': selected_lang,
+        'school_level': selected_level, 
+        'response_type': selected_response_type, # نوع الاستجابة الافتراضي الجديد
         'is_unlimited': False,
         'requests_today': 0,
         'last_request_date': str(date.today()),
@@ -364,6 +380,30 @@ def handle_register():
 
 # --- VI. Interface Utilisateur (UI) ---
 
+def admin_dashboard_ui():
+    """واجهة الإدارة تظهر فقط للبريد الإلكتروني المخصص."""
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("👑 لوحة تحكم الإدارة")
+    st.sidebar.warning("هذا القسم مرئي فقط لك.")
+    
+    st.sidebar.markdown(f"**بريد الإدارة:** `{ADMIN_EMAIL}`")
+    
+    # مثال على زر لإعطاء وصول غير محدود لنفسك
+    if st.sidebar.button("تفعيل/إلغاء الوصول غير المحدود"):
+        is_current_unlimited = st.session_state.user_data.get('is_unlimited', False)
+        new_status = not is_current_unlimited
+        
+        # استخدام مفتاح الخدمة للتأكد من التحديث
+        if update_user_data(ADMIN_EMAIL, {'is_unlimited': new_status}, use_service_key=True):
+            st.session_state.is_unlimited = new_status
+            st.session_state.should_rerun = True
+            st.sidebar.success(f"حالة الوصول غير المحدود: {'مُفعل' if new_status else 'مُلغى'}")
+        else:
+            st.sidebar.error("فشل التحديث. تأكد من إعداد SUPABASE_SERVICE_KEY.")
+            
+    st.sidebar.markdown("---")
+    # يمكن إضافة المزيد من وظائف الإدارة هنا (مثل رؤية الإحصائيات، إلخ)
+    
 def auth_ui():
     """Interface de connexion/inscription."""
     st.header("🔑 Connexion / Inscription")
@@ -385,8 +425,35 @@ def auth_ui():
             st.text_input("Mot de passe", type="password", key="reg_password")
             st.text_input("Confirmer le mot de passe", type="password", key="reg_password_confirm")
             
-            st.subheader("Vos Préférences par Défaut")
-            st.caption("Compte configuré par défaut: **Français** (Étapes détaillées، niveau **Classes Préparatoires**).")
+            st.subheader("Vos Préférences (Initiales)")
+            
+            # حقل المستوى الدراسي
+            st.selectbox(
+                "Niveau Scolaire (Système Marocain)",
+                options=MAROC_LEVELS,
+                index=len(MAROC_LEVELS) - 1, # القيمة الافتراضية
+                key="reg_level"
+            )
+            
+            # حقل اللغة
+            st.radio(
+                "Langue de Réponse",
+                options=["fr", "ar"],
+                format_func=lambda x: "Français 🇫🇷" if x == "fr" else "العربية 🇲🇦",
+                key="reg_lang",
+                horizontal=True
+            )
+            
+            # 🌟 الإضافة الجديدة: حقل نوع الاستجابة
+            st.selectbox(
+                "Type de Réponse par Défaut",
+                options=list(RESPONSE_TYPES.keys()),
+                format_func=lambda x: RESPONSE_TYPES[x],
+                index=0, # steps
+                key="reg_response_type",
+                help="Choisissez comment l'IA devrait répondre par défaut (Étapes, Concept, ou Réponse Finale)."
+            )
+
 
             query_params = st.query_params
             if REFERRAL_PARAM in query_params:
@@ -413,8 +480,6 @@ def main_app_ui():
             type=["png", "jpg", "jpeg"],
             key="image_uploader"
         )
-        # ❌ حذف منطق get_image_part
-        # image_part_to_send = get_image_part(uploaded_file) 
         
         if uploaded_file: 
             try:
@@ -434,11 +499,9 @@ def main_app_ui():
         
         if st.button("Générer la Réponse Mathématique", use_container_width=True, type="primary"):
             if not user_prompt and not uploaded_file:
-                st.warning("Veuillez entrer une question ou télécharger une image pour commencer.")
-            # 🌟 تم تمرير uploaded_file مباشرة، ولم نعد نتحقق من image_part_to_send
+                st.warning("Veuillez entrer une question أو télécharger une image pour commencer.")
             else:
                 with st.spinner('L\'IA analyse et prépare la réponse...'):
-                    # 🌟 التعديل 2: تمرير uploaded_file مباشرة إلى دالة API
                     generated_text, sources = call_gemini_api(user_prompt, uploaded_file)
                 
                 st.subheader("✅ Réponse Générée :")
@@ -461,10 +524,13 @@ def main_app_ui():
     requests_left = max_total_requests - st.session_state.requests_today
 
     st.sidebar.header(f"Statut : {st.session_state.user_email}")
-    # تم تغيير st.session_state.user_data.get('school_level', 'Non Défini') إلى st.session_state.school_level
-    # وذلك بعد تهيئته مباشرة في دالة load_user_session
     st.sidebar.markdown(f"**Niveau Actuel:** {st.session_state.school_level}")
     st.sidebar.markdown(f"**Bonus Affiliation:** {st.session_state.user_data.get('bonus_questions', 0)} questions")
+    
+    # عرض لوحة الإدارة إذا كان البريد هو بريد المدير
+    if st.session_state.user_email == ADMIN_EMAIL.lower():
+        admin_dashboard_ui()
+
 
     if st.session_state.is_unlimited:
         status_message = "✅ **Utilisation Illimitée (VIP)**"
@@ -505,3 +571,4 @@ else:
 if st.session_state.should_rerun:
     st.session_state.should_rerun = False
     st.rerun()
+
